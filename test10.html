@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>丸み係数による球状化率（ISO法）</title>
+</head>
+<body>
+<p id="status">OpenCV.jsの読み込み…</p>
+
+<div><input type="file" id="selectedFile" name="file" /></div>
+<div><img id="inputImg" src="" style="display: none;" /></div>
+
+<!--
+<canvas id="canvas_img" style="display: none;" ></canvas>
+-->
+
+<canvas id="canvas_img" style="width: 400px;" /></canvas>
+
+<script>
+let selectedFile = document.getElementById("selectedFile");
+let inputImg = document.getElementById('inputImg');
+
+// 選択画像の読み込み
+async function uploadImage() {
+    inputImg.src = URL.createObjectURL(selectedFile.files[0]);
+	//console.log("uploadImage fin");
+}
+
+// 画像処理
+inputImg.onload = function() {
+	let src = cv.imread(inputImg);
+	let dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
+	let contours = new cv.MatVector();
+	let hierarchy = new cv.Mat();
+	let contours1 = new cv.MatVector();
+	let hierarchy1 = new cv.Mat();
+
+	let red_color = new cv.Scalar(255, 0, 0, 255);//(255, 0, 0)とすると白色で描画されるためアルファチャンネルを追加
+	let black_color = new cv.Scalar(0, 0, 0);
+	let blue_color = new cv.Scalar(0, 0, 255, 255);//(255, 0, 0)とすると白色で描画されるためアルファチャンネルを追加
+	
+	let marumi_ratio = 0.6;//iso法で形状ⅤとⅥと判定する丸み係数のしきい値
+	let sum_graphite_areas = 0;
+	let sum_graphite_areas_5and6 = 0;
+	let num_graphite1 = num_graphite2 = num_graphite3 = num_graphite4 = num_graphite5 = 0;
+  
+	//画像のグレースケール化、反転二値化、輪郭（黒鉛の輪郭）の抽出
+	cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+	cv.threshold(dst, dst, 0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU);
+	cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE);
+
+	let minimum_graphite_length = 10;
+	let picture_width = 1420;
+
+	//最小黒鉛の大きさ÷画像の幅 の計算
+	let miniGraSize = minimum_graphite_length / picture_width;
+
+	//最小黒鉛の長さより小さい黒鉛と、画像の縁に掛かっている黒鉛を背景と同じ色（黒色）に塗りつぶす
+	for (let i = 0; i < contours.size(); ++i) {
+		let cnt = contours.get(i);
+		let rect = cv.boundingRect(cnt);  // rect.x, rect.y, rect.width, rect.height
+		let circle = cv.minEnclosingCircle(cnt); //  circle.center, circle.radius
+		if ((src.cols * miniGraSize > 2 * circle.radius) || (1 > rect.x) || (1 > rect.y)
+			|| ((rect.x + rect.width) >= src.cols) || ((rect.y + rect.height) >= src.rows)){
+			cv.drawContours(dst, contours, i, black_color, cv.FILLED);
+		}
+	}
+	contours.delete();
+	hierarchy.delete();
+
+	//球状化率の判定に用いる輪郭を抽出して、赤色で塗りつぶし
+	cv.findContours(dst, contours1, hierarchy1, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE);
+	cv.drawContours(src, contours1, -1, red_color, cv.FILLED);
+	dst.delete();
+
+	for (i = 0; i < contours1.size(); ++i) {
+		cnt = contours1.get(i);
+		graphite_area = cv.contourArea(cnt);
+		sum_graphite_areas += graphite_area;
+		circle = cv.minEnclosingCircle(cnt);
+
+		//丸み係数の算出
+		let marumi = graphite_area / (circle.radius * circle.radius * 3.14159);
+
+		//ISO法による形状ⅤとⅥの黒鉛の判定およびⅤとⅥと判定された黒鉛を青色で塗りつぶし
+		if(marumi >= marumi_ratio){
+			sum_graphite_areas_5and6 += graphite_area;
+			cv.drawContours(src, contours1, i, blue_color, cv.FILLED);
+		}
+	}
+	
+	//球状化率（ISO法）
+	nodularityISO = sum_graphite_areas_5and6 / sum_graphite_areas * 100;
+	
+	//結果の表示
+	cv.imshow('canvas_img', src);
+	cv.imwrite('c:\data\result.jpg', src);
+ 
+	src.delete();
+
+	contours1.delete();
+	hierarchy1.delete();
+	
+	console.log(nodularityISO.toPrecision(3));
+	
+};
+
+</script>
+
+<!-- opencv.jsの読み込み -->
+<script async src="https://docs.opencv.org/4.4.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+
+<script>
+    function onOpenCvReady() {
+        document.getElementById('status').innerHTML = '準備完了';
+		selectedFile.addEventListener("change", uploadImage, false);
+    }
+</script>
+</body>
+</html>
