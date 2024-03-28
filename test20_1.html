@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OpenCV.js Image Processing</title>
+  <script src="https://docs.opencv.org/3.4/opencv.js"></script>
+</head>
+<body>
+  <h2>OpenCV.js Image Processing</h2>
+  <input type="file" id="fileInput" multiple>
+  <br>
+  <canvas id="outputCanvas" width="400" height="300"></canvas>
+  <script>
+    // ウェブページのロード後に実行
+    document.addEventListener('DOMContentLoaded', function () {
+      // ファイル入力フィールドの要素を取得
+      var fileInput = document.getElementById('fileInput');
+      // キャンバス要素を取得
+      var outputCanvas = document.getElementById('outputCanvas');
+      var ctx = outputCanvas.getContext('2d');
+
+      // ファイルが選択されたときの処理
+      fileInput.addEventListener('change', function (event) {
+        // 選択されたファイルを取得
+        var files = event.target.files;
+        // ファイルの数だけ処理を行う
+        for (var i = 0; i < files.length; i++) {
+          // 画像ファイルを読み込む
+          var reader = new FileReader();
+          reader.onload = function (event) {
+            // 画像をキャンバスに描画
+            var img = new Image();
+            img.onload = function () {
+              outputCanvas.width = img.width;
+              outputCanvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
+
+              // OpenCV.jsを使用して画像処理を行う
+              var src = cv.imread(outputCanvas);
+              cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+              cv.threshold(src, src, 100, 255, cv.THRESH_BINARY);
+              var contours = new cv.MatVector();
+              var hierarchy = new cv.Mat();
+              cv.findContours(src, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+              for (var j = 0; j < contours.size(); j++) {
+                var color = new cv.Scalar(255, 0, 0, 255); // 赤色
+                cv.drawContours(src, contours, j, color, 2, cv.LINE_8, hierarchy, 0);
+              }
+              cv.imshow(outputCanvas, src);
+              src.delete(); contours.delete(); hierarchy.delete();
+
+              // 処理した画像を保存
+              var imageData = outputCanvas.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+              var link = document.createElement('a');
+              link.download = 'processed_image_' + i + '.png';
+              link.href = imageData;
+              link.click();
+            };
+            img.src = event.target.result;
+          };
+          reader.readAsDataURL(files[i]);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

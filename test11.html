@@ -7,9 +7,8 @@
 <body>
 <p id="status">OpenCV.jsの読み込み…</p>
 
-<div><input type="file" id="selectedFile" name="file" /></div>
+<div><input type="file" id="selectedFiles" name="file" multiple/></div>
 <div><img id="inputImg" src="" style="display: none;" /></div>
-
 <canvas id="canvas_img" style="display: none;" ></canvas>
 
 <!--
@@ -17,18 +16,31 @@
 -->
 
 <script>
-let selectedFile = document.getElementById("selectedFile");
+let fileList = []
+//const selectedFile = document.getElementById("selectedFiles").files[0];
 let inputImg = document.getElementById('inputImg');
-let FILENAME; //入力画像のファイル名
 
-// 選択画像の読み込み
-async function uploadImage() {
-    inputImg.src = URL.createObjectURL(selectedFile.files[0]);
-	FILENAME = selectedFile.files[0].name
+const inputElement = document.getElementById("selectedFiles");
+inputElement.addEventListener("change", handleFiles, false);
+
+function handleFiles() {
+	fileList = this.files; /* ファイルリストを処理するコードがここに入る */
 }
+const numFiles = fileList.length;
 
-// 画像処理
-inputImg.onload = function() {
+for (let i = 0, numFiles = fileList.length; i < numFiles; i++) {
+	const file = fileList[i];
+
+
+	// 選択画像の読み込み
+	//async function uploadImage() {
+	//    inputImg.src = URL.createObjectURL(selectedFile.files[0]);
+	//	FILENAME = selectedFile.files[0].name
+	//	FILENAME1 = selectedFile.files[1].name
+	//	console.log(FILENAME)
+	//	console.log(FILENAME1)
+	//}
+
 	let src = cv.imread(inputImg);
 	let dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
 	let contours = new cv.MatVector();
@@ -98,7 +110,7 @@ inputImg.onload = function() {
 	
 	const a = document.createElement("a"); // a要素の作成
 	a.href = canvas_img.toDataURL('image/jpeg', 0.9);   // href属性のセット
-	downloadfilename = FILENAME + "_result(JIS)_" + nodularityISO.toPrecision(3) + ".jpg";  // ファイル名のセット
+	downloadfilename = file + "_result(ISO)_" + nodularityISO.toPrecision(3) + ".jpg";  // ファイル名のセット
 	a.download = downloadfilename;
 	a.click();   // 疑似的にクリック
  
@@ -119,7 +131,6 @@ inputImg.onload = function() {
 <script>
     function onOpenCvReady() {
         document.getElementById('status').innerHTML = '準備完了';
-		selectedFile.addEventListener("change", uploadImage, false);
     }
 </script>
 </body>

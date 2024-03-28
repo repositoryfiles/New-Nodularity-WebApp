@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>丸み係数による球状化率</title>
+</head>
+<body>
+<p id="status">OpenCV.jsの読み込み…</p>
+
+  <input type="file" id="fileInput" multiple>
+  <br>
+<!--  <canvas id="outputCanvas" width="400" height="300"></canvas> -->
+  <canvas id="outputCanvas" style="width: 400px;" ></canvas>
+  <p id="display_result"></p>
+
+  <script>
+	let marumi_ratio = 0.6;//iso法で形状ⅤとⅥと判定する丸み係数のしきい値
+	let minimum_graphite_length = 10;
+	let picture_width = 1420;
+    //最小黒鉛の大きさ÷画像の幅 の計算
+    let miniGraSize = minimum_graphite_length / picture_width;
+	//結果
+	let results = ""
+	
+    // ウェブページのロード後に実行
+    document.addEventListener('DOMContentLoaded', function () {
+      // ファイル入力フィールドの要素を取得
+      let fileInput = document.getElementById('fileInput');
+      // キャンバス要素を取得
+      let outputCanvas = document.getElementById('outputCanvas');
+      let ctx = outputCanvas.getContext('2d');
+
+      // ファイルが選択されたときの処理
+      fileInput.addEventListener('change', function (event) {
+        // 選択されたファイルを取得
+        let files = event.target.files;
+        // ファイルの数だけ処理を行う
+        for (let fi = 0; fi < files.length; fi++) {
+          // 画像ファイルを読み込む
+          let reader = new FileReader();
+          reader.onload = function (event) {
+            // 画像をキャンバスに描画
+            let img = new Image();
+            img.onload = function () {
+              outputCanvas.width = img.width;
+              outputCanvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
+			  
+              // OpenCV.jsを使用して画像処理を行う
+			  let red_color = new cv.Scalar(255, 0, 0, 255);
+			  let black_color = new cv.Scalar(0, 0, 0);
+			  let blue_color = new cv.Scalar(0, 0, 255, 255);
+			  let lightblue_color = new cv.Scalar(0, 255, 255, 255);
+			  let green_color = new cv.Scalar(0, 255, 0, 255);
+			  let violet_color = new cv.Scalar(128, 0, 128, 255);
+
+
+              let src_iso = cv.imread(outputCanvas);
+              let src_jis = cv.imread(outputCanvas);
+			  let cvt_src = cv.Mat.zeros(src_iso.rows, src_iso.cols, cv.CV_8UC3);
+
+              cv.cvtColor(src_iso, cvt_src, cv.COLOR_RGBA2GRAY, 0);
+              cv.threshold(cvt_src, cvt_src, 0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU);
+              let contours = new cv.MatVector();
+              let hierarchy = new cv.Mat();
+              let contours1 = new cv.MatVector();
+              let hierarchy1 = new cv.Mat();
+              cv.findContours(cvt_src, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+			  //最小黒鉛の長さより小さい黒鉛と、画像の縁に掛かっている黒鉛を背景と同じ色（黒色）に塗りつぶす
+			  for (let i = 0; i < contours.size(); ++i) {
+			    let cnt = contours.get(i);
+				let rect = cv.boundingRect(cnt);  // rect.x, rect.y, rect.width, rect.height
+				let circle = cv.minEnclosingCircle(cnt); //  circle.center, circle.radius
+				if ((src_iso.cols * miniGraSize > 2 * circle.radius) || (1 > rect.x) || (1 > rect.y)
+				  || ((rect.x + rect.width) >= src_iso.cols) || ((rect.y + rect.height) >= src_iso.rows)){
+				  cv.drawContours(cvt_src, contours, i, black_color, cv.FILLED);
+			    }
+			  }
+  			  contours.delete(); hierarchy.delete();
+			  
+  			  //球状化率の判定に用いる輪郭を抽出して、赤色で塗りつぶし
+			  cv.findContours(cvt_src, contours1, hierarchy1, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE);
+			  cv.drawContours(src_iso, contours1, -1, red_color, cv.FILLED);
+			  cv.drawContours(src_jis, contours1, -1, red_color, cv.FILLED);
+			  
+			  let sum_graphite_areas = 0;
+			  let sum_graphite_areas_5and6 = 0;
+			  let num_graphite1 = num_graphite2 = num_graphite3 = num_graphite4 = num_graphite5 = 0;
+
+			  // 個々の輪郭について形状分類
+			  for (i = 0; i < contours1.size(); ++i) {
+			    cnt = contours1.get(i);
+				graphite_area = cv.contourArea(cnt);
+				sum_graphite_areas += graphite_area;
+				circle = cv.minEnclosingCircle(cnt);
+
+				//丸み係数の算出
+				let marumi = graphite_area / (circle.radius * circle.radius * 3.14159);
+
+				//ISO法による形状ⅤとⅥの黒鉛の判定およびⅤとⅥと判定された黒鉛を青色で塗りつぶし
+				if(marumi >= marumi_ratio){
+				  sum_graphite_areas_5and6 += graphite_area;
+				  cv.drawContours(src_iso, contours1, i, blue_color, cv.FILLED);
+				}
+				
+				//JIS法による形状分類
+				  if(marumi <= 0.2){
+				    num_graphite1 += 1;
+					cv.drawContours(src_jis, contours1, i, red_color, cv.FILLED); //赤
+				  }
+				  if(0.2 < marumi && marumi <= 0.4){
+					num_graphite2 += 1;
+					cv.drawContours(src_jis, contours1, i, violet_color, cv.FILLED); //紫
+				  }
+				  if(0.4 < marumi && marumi <= 0.7){
+					num_graphite3 += 1;
+					cv.drawContours(src_jis, contours1, i, green_color, cv.FILLED); //緑
+				  }
+				  if(0.7 < marumi && marumi <= 0.8){
+					num_graphite4 += 1;
+					cv.drawContours(src_jis, contours1, i, lightblue_color, cv.FILLED); //水色
+				  }
+				  if(0.8 < marumi){
+					num_graphite5 += 1;
+					cv.drawContours(src_jis, contours1, i, blue_color, cv.FILLED); //青
+				  }
+			  }
+			  //ISO法とJIS法による球状化率
+			  nodularityISO = sum_graphite_areas_5and6 / sum_graphite_areas * 100;
+			  nodularityJIS = (0.3 * num_graphite2 + 0.7 * num_graphite3 + 0.9 * num_graphite4 + 1.0 * num_graphite5)/ contours1.size() * 100;
+
+              cv.imshow(outputCanvas, src_iso);
+              // 処理した画像を保存
+              let imageData_iso = outputCanvas.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+              let link_iso = document.createElement('a');
+              link_iso.download = files[fi].name + '_result(ISO)_' + nodularityISO.toPrecision(3) + '.jpg';
+              link_iso.href = imageData_iso;
+              link_iso.click();
+
+              cv.imshow(outputCanvas, src_jis);
+              // 処理した画像を保存
+              let imageData_jis = outputCanvas.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+              let link_jis = document.createElement('a');
+              link_jis.download = files[fi].name + '_result(JIS)_' + nodularityJIS.toPrecision(3) + '.jpg';
+              link_jis.href = imageData_jis;
+              link_jis.click();
+
+              src_iso.delete(); src_jis.delete(); cvt_src.delete(); contours1.delete(); hierarchy1.delete();
+			  
+			  results += files[fi].name + "JIS法(%) : " + nodularityJIS.toPrecision(3) + ", ISO法(%) : " + nodularityISO.toPrecision(3);
+			  console.log(results);
+
+            };
+            img.src = event.target.result;
+          };
+          reader.readAsDataURL(files[fi]);
+        }
+	    let display_result = document.getElementById("display_result");
+		display_result.innerHTML = results;
+
+      });
+    });
+  </script>
+
+<!-- opencv.jsの読み込み -->
+<script async src="https://docs.opencv.org/4.4.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+
+<script>
+    function onOpenCvReady() {
+        document.getElementById('status').innerHTML = '準備完了';
+    }
+</script>
+
+</body>
+</html>
