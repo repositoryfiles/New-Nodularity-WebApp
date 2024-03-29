@@ -1,25 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <title>丸み係数による球状化率</title>
+<meta charset="utf-8">
+<title>球状黒鉛鋳鉄のる球状化率の測定</title>
 </head>
 <body>
 <p id="status">OpenCV.jsの読み込み…</p>
 
+  パラメータ<br>
+  <label>画像の幅(μm) <input type="text" id="picture_width" size="10" value=1420></label>
+  &nbsp; 
+  <label>最小黒鉛の長さ(μm) <input type="text" id="minimum_graphite_length" size="10" value=10></label>
+  <br><br>
   <input type="file" id="fileInput" multiple>
   <br>
-<!--  <canvas id="outputCanvas" width="400" height="300"></canvas> -->
   <canvas id="outputCanvas" style="width: 400px;" ></canvas>
-  <p id="display_result"></p>
-
+  <div id="display_result"></div>
   <script>
 	let marumi_ratio = 0.6;//iso法で形状ⅤとⅥと判定する丸み係数のしきい値
-	let minimum_graphite_length = 10;
-	let picture_width = 1420;
-    //最小黒鉛の大きさ÷画像の幅 の計算
-    let miniGraSize = minimum_graphite_length / picture_width;
-	//結果
-	let results = ""
 	
     // ウェブページのロード後に実行
     document.addEventListener('DOMContentLoaded', function () {
@@ -33,7 +31,15 @@
       fileInput.addEventListener('change', function (event) {
         // 選択されたファイルを取得
         let files = event.target.files;
-        // ファイルの数だけ処理を行う
+        //結果の初期化
+		let results = "<br>結果<br>"
+		//テキストボックスの値を取得
+		let minimum_graphite_length = document.getElementById('minimum_graphite_length').value;
+		let picture_width = document.getElementById('picture_width').value;
+		//最小黒鉛の大きさ÷画像の幅 の計算
+		let miniGraSize = minimum_graphite_length / picture_width;
+
+		// ファイルの数だけ処理を行う
         for (let fi = 0; fi < files.length; fi++) {
           // 画像ファイルを読み込む
           let reader = new FileReader();
@@ -87,23 +93,23 @@
 			  let sum_graphite_areas_5and6 = 0;
 			  let num_graphite1 = num_graphite2 = num_graphite3 = num_graphite4 = num_graphite5 = 0;
 
-			  // 個々の輪郭について形状分類
+			  // 個々の黒鉛の形状分類
 			  for (i = 0; i < contours1.size(); ++i) {
 			    cnt = contours1.get(i);
 				graphite_area = cv.contourArea(cnt);
 				sum_graphite_areas += graphite_area;
 				circle = cv.minEnclosingCircle(cnt);
 
-				//丸み係数の算出
+				//丸み係数の近似値の算出
 				let marumi = graphite_area / (circle.radius * circle.radius * 3.14159);
 
-				//ISO法による形状ⅤとⅥの黒鉛の判定およびⅤとⅥと判定された黒鉛を青色で塗りつぶし
+				//ISO法による形状分類、ⅤとⅥの黒鉛を青色で塗りつぶし
 				if(marumi >= marumi_ratio){
 				  sum_graphite_areas_5and6 += graphite_area;
 				  cv.drawContours(src_iso, contours1, i, blue_color, cv.FILLED);
 				}
 				
-				//JIS法による形状分類
+				//JIS法による形状分類、Ⅰ～Ⅴの黒鉛を塗分け
 				  if(marumi <= 0.2){
 				    num_graphite1 += 1;
 					cv.drawContours(src_jis, contours1, i, red_color, cv.FILLED); //赤
@@ -129,16 +135,20 @@
 			  nodularityISO = sum_graphite_areas_5and6 / sum_graphite_areas * 100;
 			  nodularityJIS = (0.3 * num_graphite2 + 0.7 * num_graphite3 + 0.9 * num_graphite4 + 1.0 * num_graphite5)/ contours1.size() * 100;
 
-              cv.imshow(outputCanvas, src_iso);
-              // 処理した画像を保存
+              //画像の表示
+			  cv.imshow(outputCanvas, src_iso);
+
+              // 黒鉛形状で塗分けした画像を保存（ISO法）
               let imageData_iso = outputCanvas.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
               let link_iso = document.createElement('a');
               link_iso.download = files[fi].name + '_result(ISO)_' + nodularityISO.toPrecision(3) + '.jpg';
               link_iso.href = imageData_iso;
               link_iso.click();
 
+              //画像の表示
               cv.imshow(outputCanvas, src_jis);
-              // 処理した画像を保存
+
+              // 黒鉛形状で塗分けした画像を保存（JIS法）
               let imageData_jis = outputCanvas.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
               let link_jis = document.createElement('a');
               link_jis.download = files[fi].name + '_result(JIS)_' + nodularityJIS.toPrecision(3) + '.jpg';
@@ -147,17 +157,15 @@
 
               src_iso.delete(); src_jis.delete(); cvt_src.delete(); contours1.delete(); hierarchy1.delete();
 			  
-			  results += files[fi].name + "JIS法(%) : " + nodularityJIS.toPrecision(3) + ", ISO法(%) : " + nodularityISO.toPrecision(3);
-			  console.log(results);
-
+			  // 結果の表示
+			  results += files[fi].name + ", JIS法 " + nodularityJIS.toPrecision(3) + "(%), ISO法 " + nodularityISO.toPrecision(3) + "(%) <br>";
+			  let display_result = document.getElementById("display_result");
+			  display_result.innerHTML = results;
             };
             img.src = event.target.result;
           };
           reader.readAsDataURL(files[fi]);
         }
-	    let display_result = document.getElementById("display_result");
-		display_result.innerHTML = results;
-
       });
     });
   </script>
